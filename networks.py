@@ -112,7 +112,7 @@ class NN():
         # Helper method to gather data and make them into framed training data
         if self.frame_size_changed:
 #             (self.Inputset, self.Outputset) = self.dynamics.framing(frame_size=self.frame_size)
-            (self.Inputset, self.Outputset) = framing(frame_size=self.frame_size)
+            (self.Inputset, self.Outputset) = framing(self.dynamics.Inputset, self.dynamics.Outputset, frame_size=self.frame_size)
             self.frame_size_changed = False
         # Train the model and keep track of history
         if len(inds) <= 0:
@@ -125,6 +125,11 @@ class NN():
         # Put all data into one array, so that it could train
         Inputset = np.concatenate(Inputset)
         Outputset = np.concatenate(Outputset)
+        # New 0810: Normalize the data. 
+        # *Not using sklearn's normalize() or StandardScaler, because normalize() is element-wise, and
+        #  both normalize() and StandardScaler only accept 2D inputs
+        Inputset, self.input_norm_params = normalize_frame(Inputset)
+        Outputset, self.output_norm_params = normalize_frame(Outputset)
         # Mask input data that should remain unseen
         if len(self.input_mask) > 0:
             Inputset = Inputset[:,self.input_mask,:]
@@ -139,21 +144,38 @@ class NN():
         ) )
         self.current_iter += 1
     
-    # Returns the prediction and correct answer
-    def test(self, Inputset=None, Outputset=None, inds=[], squeeze=True):
-        if len(inds) <= 0:
-            # Use custom dataset
-            results = [self.model.predict(inputset) for inputset in Inputset]
-        else:
-            # Use existing dataset
+    # Returns the prediction and correct answer.
+    # This method expects you to do one of the followings:
+    # 1. Provide Inputset and Outputset and set inds to default (empty list). 
+    #    If they are of the right shape (framed & masked), and are normalized, set "processed" to be True.
+    # 2. Use data already inside the dynamics by specifying their index in inds
+    # Update 0810: Slightly modified the logic flow to allow normalization.
+    def test(self, Inputset=None, Outputset=None, inds=[], squeeze=True, processed=False):
+        # Data processing etc.
+        if len(inds) > 0:
             (Inputset, Outputset) = self.dynamics.take_dataset(inds)
-#             (Inputset, Outputset) = self.dynamics.framing(input_data=Inputset, output_data=Outputset)
+            processed = False
+        if not processed:
             (Inputset, Outputset) = framing(input_data=Inputset, output_data=Outputset)
-            if len(self.input_mask) > 0:
-                results = [self.model.predict(inputset[:,self.input_mask,:]) for inputset in Inputset]
-            else:
-                results = [self.model.predict(inputset) for inputset in Inputset]
-            # The returned Inputset and Outputset are already framed.
+            Inputset = [normalize_frame(inputset, params=self.input_norm_params)[0][:,self.input_mask,:] for inputset in Inputset]
+        
+        # Do prediction and de-normalize the prediction result
+        results = [normalize_frame(self.model.predict(inputset), 
+                                   params=self.output_norm_params, reverse=True)[0] for inputset in Inputset]
+        
+#         if len(inds) <= 0:
+#             # Use custom dataset
+#             results = [self.model.predict(inputset) for inputset in Inputset]
+#         else:
+#             # Use existing dataset
+#             (Inputset, Outputset) = self.dynamics.take_dataset(inds)
+# #             (Inputset, Outputset) = self.dynamics.framing(input_data=Inputset, output_data=Outputset)
+#             (Inputset, Outputset) = framing(input_data=Inputset, output_data=Outputset)
+#             if len(self.input_mask) > 0:
+#                 results = [self.model.predict(inputset[:,self.input_mask,:]) for inputset in Inputset]
+#             else:
+#                 results = [self.model.predict(inputset) for inputset in Inputset]
+#             # The returned Inputset and Outputset are already framed.
         
         # Squeezing reduces unnecessary dimensions.
         if squeeze:

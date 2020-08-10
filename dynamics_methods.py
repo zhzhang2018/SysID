@@ -53,3 +53,33 @@ def framing(input_data, output_data, frame_size=1, pred_size=0):
             output_frames[-1] = output_frames[-1][:Nframes]
         
     return input_frames, output_frames
+
+# New method 0810: Helps with normalization
+def normalize(data, axis, params=None, reverse=False):
+    # Arguments:
+    # data - the input data; could be of any shape
+    # axis - the only axis that should be preserved; i.e. the axis that represents Nfeatures
+    # params - a tuple (mean, variance) to use for data, where each element should have Nfeatures values.
+    #          If params=None, then the system finds the mean and variance by itself.
+    # reverse - whether we want normalization or de-normalization. When reverse is True, params should not be None.
+    Nfeats = data.shape[axis]
+    if params is None:
+        # https://numpy.org/doc/stable/reference/generated/numpy.moveaxis.html#numpy.moveaxis
+        X = np.moveaxis(data, axis, 0).reshape(Nfeats, -1)
+        params = ( np.mean(X, axis=1), np.std(X, axis=1) )
+        if reverse:
+            print('Normalize() method warning: Nonsensical input combination. If you want reverse, you should provide params.')
+    
+    data = np.moveaxis(data, axis, 0)
+    if reverse:
+        for i in range(Nfeats):
+            data[i] = data[i] * params[1][i] + params[0][i]
+    else:
+        for i in range(Nfeats):
+            data[i] = (data[i] - params[0][i]) / params[1][i]
+    data = np.moveaxis(data, 0, axis)
+    return data, params
+
+# New method 0810: Uses normalize() to normalize data with frames
+def normalize_frame(data, params=None, reverse=False):
+    return normalize(data, axis=0, params=params, reverse=reverse)
