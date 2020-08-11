@@ -78,6 +78,8 @@ class NN():
         self.current_iter = 0
         
     def construct(self):
+        # Constructs the network. 
+        # Will be called by the code that builds networks when needed, or when set_input_mask() is called. 
         self.train_prep()
         
         # Construct model
@@ -93,11 +95,22 @@ class NN():
         else:
             nneuron_list = [self.Nneuron]*self.Nlayer
         
+        # Updated 0811: Added option to use advanced activation function layers
         for i in range(self.Nlayer):
-            self.layers.append( tf.keras.layers.Dense(
-                nneuron_list[i], activation = self.activation, kernel_regularizer = Regularizer
-            ) )
-            self.model.add(self.layers[-1])
+            if type(self.activation) is tuple and isinstance(self.activation[0](),tf.keras.layers.Layer):
+                # Add a normal layer
+                self.layers.append( tf.keras.layers.Dense(
+                    nneuron_list[i], activation = None, kernel_regularizer = Regularizer
+                ) )
+                self.model.add(self.layers[-1])
+                # Then add the activation function layer (not sure if I'm doing the correct thing)
+                self.layers.append( self.activation[0](*self.activation[1:]) )
+                self.model.add(self.layers[-1])
+            else:
+                self.layers.append( tf.keras.layers.Dense(
+                    nneuron_list[i], activation = self.activation, kernel_regularizer = Regularizer
+                ) )
+                self.model.add(self.layers[-1])
         
         # Add output layer ## - assuming single output but I think I've extended it
         self.layers.append( tf.keras.layers.Dense(np.prod(self.output_shape), activation = self.output_activation) )
@@ -204,11 +217,28 @@ class NN():
         return fig, axs
         
     def set_activation(self, act_func):
+        act_func = act_func.lower()
         if act_func == 'relu':
             return tf.keras.activations.relu
         elif act_func == 'tanh':
             return tf.keras.activations.tanh
+        elif act_func == 'sigmoid':
+            return tf.keras.activations.sigmoid
+        elif 'leaky' in act_func or 'leaky_relu' in act_func:
+            # Caution: Leaky ReLU is a layer, not a function, in tensorflow, and requires parameters.
+            # Thus, we try to see if any parameter is present in the string, and use the first one as the value.
+            # We must not return an instance. We can only return the reference to the class, and the parameters.
+            alpha = 0.1
+            for s in act_func.split():
+                try:
+                    alpha = float(s)
+                    break
+                except:
+                    continue
+            return (tf.keras.layers.LeakyReLU, alpha)
+#             return tf.keras.layers.LeakyReLU(alpha=alpha)
         else:
+            # Linear activation by default
             return None
             
     def set_optimizer(self, optimizer):

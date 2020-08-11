@@ -85,3 +85,26 @@ def normalize(data, axis, params=None, reverse=False):
 # New method 0810: Uses normalize() to normalize data with frames
 def normalize_frame(data, params=None, reverse=False):
     return normalize(data, axis=1, params=params, reverse=reverse)
+
+# New method 0811: Examplar decorator method
+# Reference: https://pythonbasics.org/decorators/
+# To make interactive Jupyter functions, visit https://ipywidgets.readthedocs.io/en/latest/examples/Using%20Interact.html
+import time                                                                                                               
+def measure_time(func):                                                                                                   
+    def wrapper(*arg):                                                                                                      
+        t = time.time()                                                                                                     
+        res = func(*arg)                                                                                                    
+        print("Function took " + str(time.time()-t) + " seconds to run")                                                    
+        return res                                                                                                          
+    return wrapper                                                                                                          
+# To use:
+# @measure_time                                                                                                             
+# def myFunction(n):                                                                                                        
+#     <Do whatever the function wants to do>
+# The above code would point myFunction() to a new method, where the said new method carries out wrapper() with
+# the original myFunction() as func inside. 
+
+# To use interaction in visualization, check out this code example:
+# https://ipywidgets.readthedocs.io/en/latest/examples/Using%20Interact.html#Flickering-and-jumping-output
+# and this one:
+# https://ipywidgets.readthedocs.io/en/stable/examples/Lorenz%20Differential%20Equations.html
