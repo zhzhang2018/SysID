@@ -115,13 +115,20 @@ class NN():
             (self.Inputset, self.Outputset) = framing(self.dynamics.Inputset, self.dynamics.Outputset, frame_size=self.frame_size)
             self.frame_size_changed = False
         # Train the model and keep track of history
-        if len(inds) <= 0:
-            Inputset = self.Inputset
-            Outputset = self.Outputset
-        else:
-            (Inputset, Outputset) = self.dynamics.take_dataset(inds)
-            (Inputset, Outputset) = framing(input_data=Inputset, output_data=Outputset)
-#             (Inputset, Outputset) = self.dynamics.framing(input_data=Inputset, output_data=Outputset)
+        # Update 0810: Changed the if-else below to a more simple and hopefully child-friendly logic flow.
+        # For example, now NN_Delay can just call this super method, instead of repeating its own code. 
+        Inputset = self.Inputset
+        Outputset = self.Outputset
+        if len(inds) > 0:
+            (Inputset, Outputset) = ( [self.Inputset[i] for i in inds], [self.Outputset[i] for i in inds] )
+#         if len(inds) <= 0:
+#             Inputset = self.Inputset
+#             Outputset = self.Outputset
+#         else:
+#             (Inputset, Outputset) = self.dynamics.take_dataset(inds)
+#             (Inputset, Outputset) = framing(input_data=Inputset, output_data=Outputset)
+# #             (Inputset, Outputset) = self.dynamics.framing(input_data=Inputset, output_data=Outputset)
+
         # Put all data into one array, so that it could train
         Inputset = np.concatenate(Inputset)
         Outputset = np.concatenate(Outputset)

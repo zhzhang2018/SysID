@@ -50,6 +50,29 @@ def delay_embed(dt_int, de, Inputset, Outputset, pred, symmetric=False):
 #         print(offset, pred, Nframes, dembed_in[-1].shape[0], dembed_out[-1].shape[0])
     return (dembed_in, dembed_out)
 
+def delay_embed_converter_Garcia_Cao(G2C, args):
+    # Helper method that converts the two ways I used to record delay values for FNN methods (Garcia's vs Cao's)
+    if G2C:
+        js, ts = args
+        tts = np.zeros((max(js), len(js)), dtype=int)
+        jinds = [0] * len(js)
+        for i,j in enumerate(js):
+            tts[j,jinds[j]] = ts[i]
+            jinds[j] += 1
+        return tts
+    else:
+        js = []
+        ts = []
+        tts = args
+        for j in range(tts.shape[0]):
+            for k in range(tts.shape[1]):
+                if tts[j,k] <= 0:
+                    break
+                # Store the index of the largest delay in the embedding
+                ts.append(tts[j,k])
+                js.append(j)
+        return js, ts
+
 # Generate delay-embedded data when delay is nonuniform.
 def delay_embed_Garcia(js, ts, Inputset, Outputset, pred, Timeset=None):
     # js - list of row indices
@@ -57,6 +80,8 @@ def delay_embed_Garcia(js, ts, Inputset, Outputset, pred, Timeset=None):
     # pred - the amount of timesteps the Outputset is supposed to be ahead of from the Inputset
     # New argument addition: "Timeset", where it stores time, and would be embedded/framed to match output.
     # The symmetric flag in the uniform case won't apply here.
+    # Outputs:
+    # dembed_in - supposed to be of the shape (Nframes, embed_dimension, 1)
     offset = ts[-1] +pred
 
     dembed_in = []

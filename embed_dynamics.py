@@ -450,6 +450,7 @@ class NN_Delay(NN_Dense):
     # Modified the original data geneation method, but not changing its structure by too much.
     # This in turn modifies the training procedure, because self.train() calls this method in its beginning.
     # Helper method to gather data and make them into framed training data
+    # Update 0810: Updated the super method, so that this method can just call the same method from its parent. 
     def train_data_generation_helper(self, inds=[]):
         # First step: Using the available data, find the best delay and dimension
         if self.delay_int <= 0:
@@ -467,38 +468,48 @@ class NN_Delay(NN_Dense):
             (self.Inputset, self.Outputset) = delay_embed(
                 self.delay_int, self.de, self.dynamics.Inputset, self.dynamics.Outputset, self.dynamics.pred, symmetric=self.sym)
             self.frame_size_changed = False
-        # Train the model and keep track of history
-        if len(inds) <= 0:
-            Inputset = self.Inputset
-            Outputset = self.Outputset
-        else:
-            (Inputset, Outputset) = ( [self.Inputset[i] for i in inds], [self.Outputset[i] for i in inds] )
-        # Put all data into one array, so that it could train
-        Inputset = np.concatenate(Inputset)
-        Outputset = np.concatenate(Outputset)
-        # Mask input data that should remain unseen
-        if len(self.input_mask) > 0:
-            Inputset = Inputset[:,self.input_mask,:]
-        return (Inputset, Outputset)
+        
+        # Update 0810: Changed everything below into this single line. Note that the super method has normalization added.
+        return super().train_data_generation_helper(inds=inds)
+    
+#         # Train the model and keep track of history
+#         if len(inds) <= 0:
+#             Inputset = self.Inputset
+#             Outputset = self.Outputset
+#         else:
+#             (Inputset, Outputset) = ( [self.Inputset[i] for i in inds], [self.Outputset[i] for i in inds] )
+#         # Put all data into one array, so that it could train
+#         Inputset = np.concatenate(Inputset)
+#         Outputset = np.concatenate(Outputset)
+#         # Mask input data that should remain unseen
+#         if len(self.input_mask) > 0:
+#             Inputset = Inputset[:,self.input_mask,:]
+#         return (Inputset, Outputset)
     
     # Modify the original test method, because we need to embed the input data...
     # If using external input, this method expects that input to follow the same input structure
     # as the ones stored in the model. 
     def test(self, Inputset=None, Outputset=None, inds=[], squeeze=True):
 #         (Inputset, Outputset) = delay_embed(self.delay_int, self.de, inds, Inputset, Outputset)
-        (Inputset, Outputset) = delay_embed(self.delay_int, self.de, self.dynamics.Inputset, self.dynamics.Outputset, self.dynamics.pred)
-        if len(self.input_mask) > 0:
-            results = [self.model.predict(inputset[:,self.input_mask,:]) for inputset in Inputset]
-        else:
-            results = [self.model.predict(inputset) for inputset in Inputset]
+        (Inputset, Outputset) = delay_embed(self.delay_int, self.de, 
+                                            self.dynamics.Inputset, self.dynamics.Outputset, self.dynamics.pred)
+        # Update 0810: I believe the steps below could be done by calling the following two lines.
+        Inputset = [normalize_frame(inputset, params=self.input_norm_params)[0][:,self.input_mask,:] for inputset in Inputset]
         
-        # Squeezing reduces unnecessary dimensions.
-        if squeeze:
-            results = [np.squeeze(result) for result in results]
-            Outputset = [np.squeeze(result) for result in Outputset]
-            #Inputset = [np.squeeze(result) for result in Inputset]
+        return super().test(Inputset, Outputset, inds=[], squeeze=squeeze, processed=True)
+    
+#         if len(self.input_mask) > 0:
+#             results = [self.model.predict(inputset[:,self.input_mask,:]) for inputset in Inputset]
+#         else:
+#             results = [self.model.predict(inputset) for inputset in Inputset]
         
-        return results, Outputset, Inputset
+#         # Squeezing reduces unnecessary dimensions.
+#         if squeeze:
+#             results = [np.squeeze(result) for result in results]
+#             Outputset = [np.squeeze(result) for result in Outputset]
+#             #Inputset = [np.squeeze(result) for result in Inputset]
+        
+#         return results, Outputset, Inputset
     
     # Because delay embedding dimension is directly tied with the frame_size field in parent class,
     # disable the original set method, and write a new one. 
@@ -518,9 +529,10 @@ class NN_Delay(NN_Dense):
 # Parent class for NNs that use FNN-related methods during training.
 # Used to be abstract, but I find it too cumbersome.
 class NN_FNN(NN_Dense):
-    def __init__(self, dynamics, input_mask, ratio=10, stop_threshold=0, max_tau=20, max_de=10, verbose=False, 
+    def __init__(self, dynamics, input_mask, ratio=10, stop_threshold=0, min_tau=1, max_tau=20, max_de=10, verbose=False, 
                  fnn_ind=0, FNNtype='kennel', uniform_delay=True, # The last argument is only for Cao and Kennel.
                  inverse=True, local_max=True, twoD=False, # Only for Garcia. inverse also appears for Kennel.
+                 delay_vars=None, # If the user wants to specify delay values themselves.
                  seed=2020, log_dir=None, tensorboard=False,
                  Nlayer=2, Nneuron=5, learning_rate=0.001, activation='relu', output_activation='none', optimizer='adam'):
         self.verbose=verbose
@@ -531,6 +543,7 @@ class NN_FNN(NN_Dense):
         self.ratio = ratio
         self.stop_threshold = stop_threshold
         self.max_tau = max_tau
+        self.min_tau = min_tau
         self.max_dim = max_de
         
         if len(input_mask) <= 0:
@@ -546,7 +559,16 @@ class NN_FNN(NN_Dense):
         # Call the fnn method and obtain some returned values.
         # self.js stores the variable index for each delay embedding dimension, while self.ts stores the corresponding
         # delay values (accumulatively). self.FNNargs stores all the rest.
-        (self.js, self.tts, self.FNNargs) = self.find_de_via_fnn(fnn_ind)
+        if delay_vars is None:
+            (self.js, self.tts, self.FNNargs) = self.find_de_via_fnn(fnn_ind)
+        elif len(delay_vars) <= 2:
+            self.js = delay_vars[0]
+            self.tts = delay_vars[1]
+            self.FNNargs = None
+        else:
+            self.js = delay_vars[0]
+            self.tts = delay_vars[1]
+            self.FNNargs = delay_vars[2]
         
         self.de = len(self.js) + len(input_mask)
         # Below I'll hack the meaning of "input_mask"...
@@ -566,7 +588,8 @@ class NN_FNN(NN_Dense):
     def find_de_via_fnn(self, fnn_ind=0):
         return find_delay(self.dynamics.Inputset[fnn_ind][self.input_mask,:], 
                           method='FNN', FNNmethod=self.FNNtype, 
-                          min_delay=1, max_delay=self.max_tau, max_dim=self.max_dim, end_early=True, verbose=self.verbose, 
+                          min_delay=self.min_tau, max_delay=self.max_tau, max_dim=self.max_dim, 
+                          end_early=True, verbose=self.verbose, 
                           ratio=self.ratio, pred=self.dynamics.pred, stop_threshold=self.stop_threshold, 
                           uniform_delay=self.uniform_delay, inverse=self.inverse, local_max=self.local_max, twoD=self.twoD)
 #         if self.FNNtype.lower() = 'garcia':
@@ -610,6 +633,7 @@ class NN_FNN(NN_Dense):
     # This in turn modifies the training procedure, because self.train() calls this method in its beginning.
     # Helper method to gather data and make them into framed training data.
     # Notice that, UNLIKE other helper methods, this one has to do the input masking earlier.
+    # Update 0810: Added normalization.
     def train_data_generation_helper(self, inds=[]):
         if self.frame_size_changed:
             inputsets = [inputset[self.input_mask,:] for inputset in self.dynamics.Inputset]
@@ -625,6 +649,10 @@ class NN_FNN(NN_Dense):
         # Put all data into one array, so that it could train
         Inputset = np.concatenate(Inputset)
         Outputset = np.concatenate(Outputset)
+        # Added in 0810
+        Inputset, self.input_norm_params = normalize_frame(Inputset)
+        Outputset, self.output_norm_params = normalize_frame(Outputset)
+        
         if self.verbose:
             print('Inputset size = {0}; outputset size = {1}'.format(Inputset.shape, Outputset.shape))
             print('Input set is masked by ', self.input_mask)
@@ -636,11 +664,18 @@ class NN_FNN(NN_Dense):
     # Modify the original test method, because we need to embed the input data...
     # __I changed the embedding method and this method to allow it to return time data in frames__
     # __Also because Garcia FNN has a different embedding__
+    # Update 0810: Added normalization. Note that its process is different than the parent method's process,
+    # because it applied input mask earlier. Thus we apply mask inside the call, and can't use normalize_frame().
     def test(self, inds=[], squeeze=True):
-        inputsets = [inputset[self.input_mask,:] for inputset in self.dynamics.Inputset]
+        inputsets = [normalize( inputset[self.input_mask,:], axis=0,
+                                params=self.input_norm_params)[0] for inputset in self.dynamics.Inputset]
+#         inputsets = [inputset[self.input_mask,:] for inputset in self.dynamics.Inputset]
         (Inputset, Outputset, Timeset) = self.delay_embed_fnn(
                                                               inputsets)
-        results = [self.model.predict(inputset) for inputset in Inputset]
+        # The output is still 3D! We constructed it this way. 
+        results = [normalize_frame(self.model.predict(inputset), 
+                                   params=self.output_norm_params, reverse=True)[0] for inputset in Inputset]
+#         results = [self.model.predict(inputset) for inputset in Inputset]
         
         # Squeezing reduces unnecessary dimensions.
         if squeeze:
