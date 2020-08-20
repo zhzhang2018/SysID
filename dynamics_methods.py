@@ -69,8 +69,11 @@ def normalize(data, axis, params=None, reverse=False):
         params = ( np.mean(X, axis=1), np.std(X, axis=1) )
         if reverse:
             print('Normalize() method warning: Nonsensical input combination. If you want reverse, you should provide params.')
+#     print(params)
 #     print('axis {0} is the main axis. There are {1} variables along it. Whole data size is {2}.'.format(axis, Nfeats, data.shape))
-    data = np.moveaxis(data, axis, 0)
+#     '''
+    data = np.swapaxes(data, axis, 0)
+#     data = np.moveaxis(data, axis, 0)
 #     print('The parameters have size {0}, so we resized the data into {1} for computation.'.format(params[0].shape, data.shape))
     if reverse:
         for i in range(Nfeats):
@@ -78,7 +81,9 @@ def normalize(data, axis, params=None, reverse=False):
     else:
         for i in range(Nfeats):
             data[i] = (data[i] - params[0][i]) / params[1][i]
-    data = np.moveaxis(data, 0, axis)
+    data = np.swapaxes(data, 0, axis)
+#     data = np.moveaxis(data, 0, axis)
+#     '''
 #     print('Turned data back to its original shape {0} and finishing the method.'.format(data.shape))
     return data, params
 

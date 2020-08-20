@@ -13,142 +13,142 @@ from embedding_methods import *
 class Delay_System(System):
     # A class that contains a system dynamics, does delay embedding, and interfaces with Delay NN.
     def __init__(self, d, init=None, t0=0, tf=1, dt=0.01, noise=0, pred=0):
-        self.pred = pred
-        super().__init__(d, init, t0, tf, dt, noise)
-    
-    def est_delay(self):
-        # Delay estimation using AMI: Finds the AMI for increasing delay value,
-        # until it finds the first local minima. (Ty et al)
-        pass
+        # self.pred = pred
+        super().__init__(d, init, t0, tf, dt, noise, pred)
         
     ## 0714 I'm phasing out the methods below. Refer to embedding_methods.py instead.
     # Functions for delay embedding. Decided to endow this method to this class, instead
     # of the dynamics class.
     # This function is for generating training data, not estimating the optimal delay choice. 
-#     def delay_embed(self, dt_int, de, pred=-1, inds=[], Inputset=None, Outputset=None, symmetric=False):
-#         # As of now, we assume that:
-#         # 1) dt_int is an integer specifying the delay as the number of dts.
-#         #    Currently don't support intervals that aren't integer multiples of dt.
-#         # 2) de is a provided embedding dimension.
-#         #    Might consider implementing FalseNN for automatic de detection later.
-#         # 3) This implementation, by default, assumes that:
-#         #    - The caller wants to know the embedding at any instant;
-#         #    - The caller wants to learn the relationship between embedding and some
-#         #      specific output value (not an embedding, but only a slice).
-#         #      If the output should be an embedding, create a subclass and overwrite dis.
-        
-#         # The symmetric flag indicates how the output frames match up with input frames.
-#         # As an example, consider input = [1,2,3,4,5] and output = [a,b,c,d,e],
-#         # with delay = 1 and dimension = 3.
-#         # If symmetric is False: 
-#         #     We'll have input as [[1,2,3], [2,3,4], [3,4,5]], and output as [c,d,e].
-#         # If symmetric is True:
-#         #     We'll have input as [[1,2,3], [2,3,4], [3,4,5]], and output as [b,c,d].
-#         # The "offset" value also decides other stuff, such as how much time into the future
-#         # would the dataset want to predict. 
-#         if pred < 0:
-#             pred = self.pred
-#         if symmetric:
-#             offset = (de-1 - (de//2))*dt_int +pred
-#         else:
-#             offset = (de-1)*dt_int +pred
-        
-#         if Inputset is None:
-#             Inputset = self.Inputset
-#         if Outputset is None:
-#             Outputset = self.Outputset
-#         if len(inds) <= 0:
-#             inds = range(len(Inputset))
-#         dembed_in = []
-#         dembed_out = []
-#         for i in inds:
-#             dembed_in.append( self.framing_helper(Inputset[i], de, stride=dt_int) )
-#             # If outputset is going to only include a scalar value for each frame...
-#             # Then keep the same stride, and our input would have to start from the first scalar instead.
-#             dembed_out.append( self.framing_helper(Outputset[i], 1, stride=dt_int, offset=offset) )
-#                               #, Nframes=dembed_in[-1].shape[0]) )
-#             # Check if they have the same dimensions. If not, shrink one of them.
-#             Nframes = min( dembed_in[-1].shape[0], dembed_out[-1].shape[0] )
-#             dembed_in[-1] = dembed_in[-1][:Nframes]
-#             dembed_out[-1] = dembed_out[-1][:Nframes]
-#             print(offset, pred, Nframes, dembed_in[-1].shape[0], dembed_out[-1].shape[0])
-#         return (dembed_in, dembed_out)
+    #     def delay_embed(self, dt_int, de, pred=-1, inds=[], Inputset=None, Outputset=None, symmetric=False):
+    #         # As of now, we assume that:
+    #         # 1) dt_int is an integer specifying the delay as the number of dts.
+    #         #    Currently don't support intervals that aren't integer multiples of dt.
+    #         # 2) de is a provided embedding dimension.
+    #         #    Might consider implementing FalseNN for automatic de detection later.
+    #         # 3) This implementation, by default, assumes that:
+    #         #    - The caller wants to know the embedding at any instant;
+    #         #    - The caller wants to learn the relationship between embedding and some
+    #         #      specific output value (not an embedding, but only a slice).
+    #         #      If the output should be an embedding, create a subclass and overwrite dis.
 
-#     def find_delay_from_MI(self, data, max_delay=100, method='mir', Nbin=50):
-#         # Future modification: Run this for each state in data, and return each state's mutual info.
-#         if len(data.shape) == 1:
-#             data = data.reshape(-1,1)
-#         else:
-#             data = data.T # Ending shape should be (Nsamples, Nfeatures) for mutual_info_regression and KernelDensity
-#         prev_cor = self.AMI(data, data[:,0], method=method, Nbin=Nbin)*100
-# #         prev_cor = mutual_info_regression(data, data[:,0])[0]*100
-#         local_min_found = False
-#         local_min_delay = 0
+    #         # The symmetric flag indicates how the output frames match up with input frames.
+    #         # As an example, consider input = [1,2,3,4,5] and output = [a,b,c,d,e],
+    #         # with delay = 1 and dimension = 3.
+    #         # If symmetric is False: 
+    #         #     We'll have input as [[1,2,3], [2,3,4], [3,4,5]], and output as [c,d,e].
+    #         # If symmetric is True:
+    #         #     We'll have input as [[1,2,3], [2,3,4], [3,4,5]], and output as [b,c,d].
+    #         # The "offset" value also decides other stuff, such as how much time into the future
+    #         # would the dataset want to predict. 
+    #         if pred < 0:
+    #             pred = self.pred
+    #         if symmetric:
+    #             offset = (de-1 - (de//2))*dt_int +pred
+    #         else:
+    #             offset = (de-1)*dt_int +pred
 
-#         for t in range(1, max_delay+1):
-#             # Currently only works with 1D data...
-#             x1 = data[:-t]
-#             x2 = data[t:,0]
-#             curr_cor = self.AMI(x1, x2, method=method, Nbin=Nbin)
-# #             curr_cor = mutual_info_regression(x1, x2)
-# #             curr_cor = curr_cor[0]
+    #         if Inputset is None:
+    #             Inputset = self.Inputset
+    #         if Outputset is None:
+    #             Outputset = self.Outputset
+    #         if len(inds) <= 0:
+    #             inds = range(len(Inputset))
+    #         dembed_in = []
+    #         dembed_out = []
+    #         for i in inds:
+    #             dembed_in.append( self.framing_helper(Inputset[i], de, stride=dt_int) )
+    #             # If outputset is going to only include a scalar value for each frame...
+    #             # Then keep the same stride, and our input would have to start from the first scalar instead.
+    #             dembed_out.append( self.framing_helper(Outputset[i], 1, stride=dt_int, offset=offset) )
+    #                               #, Nframes=dembed_in[-1].shape[0]) )
+    #             # Check if they have the same dimensions. If not, shrink one of them.
+    #             Nframes = min( dembed_in[-1].shape[0], dembed_out[-1].shape[0] )
+    #             dembed_in[-1] = dembed_in[-1][:Nframes]
+    #             dembed_out[-1] = dembed_out[-1][:Nframes]
+    #             print(offset, pred, Nframes, dembed_in[-1].shape[0], dembed_out[-1].shape[0])
+    #         return (dembed_in, dembed_out)
 
-#             if curr_cor >= prev_cor:
-#                 local_min_found = True
-#             if curr_cor < prev_cor and not local_min_found:
-#                 local_min_delay = t
+    #     def find_delay_from_MI(self, data, max_delay=100, method='mir', Nbin=50):
+    #         # Future modification: Run this for each state in data, and return each state's mutual info.
+    #         if len(data.shape) == 1:
+    #             data = data.reshape(-1,1)
+    #         else:
+    #             data = data.T # Ending shape should be (Nsamples, Nfeatures) for mutual_info_regression and KernelDensity
+    #         prev_cor = self.AMI(data, data[:,0], method=method, Nbin=Nbin)*100
+    # #         prev_cor = mutual_info_regression(data, data[:,0])[0]*100
+    #         local_min_found = False
+    #         local_min_delay = 0
 
-#             prev_cor = curr_cor
+    #         for t in range(1, max_delay+1):
+    #             # Currently only works with 1D data...
+    #             x1 = data[:-t]
+    #             x2 = data[t:,0]
+    #             curr_cor = self.AMI(x1, x2, method=method, Nbin=Nbin)
+    # #             curr_cor = mutual_info_regression(x1, x2)
+    # #             curr_cor = curr_cor[0]
 
-#         return local_min_delay, local_min_found
-        
-#     def AMI(self, X, Y, method=None, Nbin=50, ep=1e-10):
-#         # Helper function for finding AMI (Average Mutual Information) for two given data, assuming scalar
-#         if method == 'kernel':
-#             # Construct grids for estimation
-#             grid_step1 = (np.amax(X) - np.amin(X)) / Nbin
-#             grid1 = np.arange(np.amin(X), np.amax(X), grid_step1)
-#             grid_step2 = (np.amax(Y) - np.amin(Y)) / Nbin
-#             grid2 = np.arange(np.amin(Y), np.amax(Y), grid_step2)
-#             Xo, Xd = np.meshgrid(grid1, grid2)
-            
-#             # Find the pdf from the object. The matrix operations are learned from the examples of:
-#             # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gaussian_kde.html
-#             skkde_12 = KernelDensity(kernel='gaussian', bandwidth=min(grid_step1, grid_step2)).fit(np.hstack((X, Y)))
-            
-#             # Get probability. Notice the "T" after the end of vstack.
-#             prob12 = skkde_12.score_samples( np.vstack( (Xo.ravel(), Xd.ravel()) ).T ).reshape(Xo.shape)
-#             # sklearn's KernelDensity also automatically uses log. We also add ep to avoid zero probability.
-#             prob12 = np.exp(prob12) * grid_step1 * grid_step2 + ep # Is this the right way?
-            
-#             # Compute the entropies and marginal probs
-#             H12 = np.sum( prob12 * np.log(prob12) )
-#             prob1 = np.sum( prob12, axis=0 )
-#             H1 = np.sum( prob1 * np.log(prob1) )
-#             prob2 = np.sum( prob12, axis=1 )
-#             H2 = np.sum( prob2 * np.log(prob2) )
-            
-#             # Get MI value
-#             MI = H12 - H1 - H2
-            
-#         elif method == 'hist':
-#             # Histogram fixed bin version
-#             # Source: https://stackoverflow.com/a/20505476
-#             H, edge_Xo, edge_Xd = np.histogram2d( X, Y, bins=Nbin )
-#             MI = mutual_info_score(None, None, contingency=(H+ep))
-            
-#         else:
-#             # Default method: Scikit-learn, continuous method
-#             # Notice that X has to be 2D and Y has to be 1D in this case...
-#             MI = mutual_info_regression( X, Y.ravel() )[0]
-#         return MI
-        
-#     def MMI(self):
-#         # Multivariate Mutual Information
-#         # Maybe not now... too many degrees of freedom here, and too hard to interpret.
-#         # And definitely not here!
-#         # https://en.wikipedia.org/wiki/Multivariate_mutual_information
-#         pass
+    #             if curr_cor >= prev_cor:
+    #                 local_min_found = True
+    #             if curr_cor < prev_cor and not local_min_found:
+    #                 local_min_delay = t
+
+    #             prev_cor = curr_cor
+
+    #         return local_min_delay, local_min_found
+
+    #     def AMI(self, X, Y, method=None, Nbin=50, ep=1e-10):
+    #         # Helper function for finding AMI (Average Mutual Information) for two given data, assuming scalar
+    #         if method == 'kernel':
+    #             # Construct grids for estimation
+    #             grid_step1 = (np.amax(X) - np.amin(X)) / Nbin
+    #             grid1 = np.arange(np.amin(X), np.amax(X), grid_step1)
+    #             grid_step2 = (np.amax(Y) - np.amin(Y)) / Nbin
+    #             grid2 = np.arange(np.amin(Y), np.amax(Y), grid_step2)
+    #             Xo, Xd = np.meshgrid(grid1, grid2)
+
+    #             # Find the pdf from the object. The matrix operations are learned from the examples of:
+    #             # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gaussian_kde.html
+    #             skkde_12 = KernelDensity(kernel='gaussian', bandwidth=min(grid_step1, grid_step2)).fit(np.hstack((X, Y)))
+
+    #             # Get probability. Notice the "T" after the end of vstack.
+    #             prob12 = skkde_12.score_samples( np.vstack( (Xo.ravel(), Xd.ravel()) ).T ).reshape(Xo.shape)
+    #             # sklearn's KernelDensity also automatically uses log. We also add ep to avoid zero probability.
+    #             prob12 = np.exp(prob12) * grid_step1 * grid_step2 + ep # Is this the right way?
+
+    #             # Compute the entropies and marginal probs
+    #             H12 = np.sum( prob12 * np.log(prob12) )
+    #             prob1 = np.sum( prob12, axis=0 )
+    #             H1 = np.sum( prob1 * np.log(prob1) )
+    #             prob2 = np.sum( prob12, axis=1 )
+    #             H2 = np.sum( prob2 * np.log(prob2) )
+
+    #             # Get MI value
+    #             MI = H12 - H1 - H2
+
+    #         elif method == 'hist':
+    #             # Histogram fixed bin version
+    #             # Source: https://stackoverflow.com/a/20505476
+    #             H, edge_Xo, edge_Xd = np.histogram2d( X, Y, bins=Nbin )
+    #             MI = mutual_info_score(None, None, contingency=(H+ep))
+
+    #         else:
+    #             # Default method: Scikit-learn, continuous method
+    #             # Notice that X has to be 2D and Y has to be 1D in this case...
+    #             MI = mutual_info_regression( X, Y.ravel() )[0]
+    #         return MI
+
+    #     def MMI(self):
+    #         # Multivariate Mutual Information
+    #         # Maybe not now... too many degrees of freedom here, and too hard to interpret.
+    #         # And definitely not here!
+    #         # https://en.wikipedia.org/wiki/Multivariate_mutual_information
+    #         pass
+    
+    def est_delay(self):
+        # Delay estimation using AMI: Finds the AMI for increasing delay value,
+        # until it finds the first local minima. (Ty et al)
+        pass
     
 class LorenzD(Delay_System):
     def __init__(self, init=None, t0=0, tf=1, dt=0.01, noise=0, 
@@ -427,7 +427,8 @@ class RikitakeFullState(Delay_System):
 # Modified on top of the old version of NN_Delay_Old in networks.py
 class NN_Delay(NN_Dense):
     def __init__(self, dynamics, input_mask, seed=2020, log_dir=None, tensorboard=False,
-                 Nlayer=2, Nneuron=5, learning_rate=0.001, activation='relu', output_activation='none', optimizer='adam', 
+                 Nlayer=2, Nneuron=5, learning_rate=0.001, activation='relu', output_activation='none', 
+                 optimizer='adam', opt_args=(), loss='mse', pred=-1, lr_sched=None,
                  de=-1, delay_int=-1, sym=False):
 #         if de <= 0:
 #             de = self.find_de_via_fnn()
@@ -438,7 +439,8 @@ class NN_Delay(NN_Dense):
         self.de = de
         self.sym = sym
         super().__init__(dynamics, input_mask, seed, log_dir, tensorboard,
-                 Nlayer, Nneuron, learning_rate, activation, output_activation, optimizer, frame_size=de)
+                 Nlayer, Nneuron, learning_rate, activation, output_activation, 
+                         optimizer, opt_args=opt_args, loss=loss, pred=pred, lr_sched=lr_sched, frame_size=de)
         # Its super calculates the shapes for inputs and outputs of the network, and nothing else.
         # Shouldn't need to do anything more than this regading the parent class methods. 
     
@@ -451,6 +453,7 @@ class NN_Delay(NN_Dense):
     # This in turn modifies the training procedure, because self.train() calls this method in its beginning.
     # Helper method to gather data and make them into framed training data
     # Update 0810: Updated the super method, so that this method can just call the same method from its parent. 
+    # Update 0813: Changed self.dynamics.pred into self.pred
     def train_data_generation_helper(self, inds=[]):
         # First step: Using the available data, find the best delay and dimension
         if self.delay_int <= 0:
@@ -458,45 +461,49 @@ class NN_Delay(NN_Dense):
 #             (self.delay_int, MI_success) = find_delay_from_MI(
 #                 self.Inputset[0][:,self.input_mask,:], max_delay=20, method='mir', Nbin=50)
             (self.delay_int, MI_success) = find_delay(
-                self.Inputset[0][:,self.input_mask,:], max_delay=20, method='mi', MImethod='mir', Nbin=50, 
-                ep=1e-10, start_delay=1, end_early=True, verbose=False)
+                self.dynamics.Inputset[0][self.input_mask,:], max_delay=20, method='mi', MImethod='mir', Nbin=50, 
+#                 self.Inputset[0][:,self.input_mask,:], max_delay=20, method='mi', MImethod='mir', Nbin=50, 
+                ep=1e-10, min_delay=1, end_early=True, verbose=False)
             if not MI_success:
                 print('Warning: Didn\'t converge when trying to find best delay from mutual information.')
         
         if self.frame_size_changed:
 #             (self.Inputset, self.Outputset) = delay_embed(self.delay_int, self.de, symmetric=self.sym)
             (self.Inputset, self.Outputset) = delay_embed(
-                self.delay_int, self.de, self.dynamics.Inputset, self.dynamics.Outputset, self.dynamics.pred, symmetric=self.sym)
+                self.delay_int, self.de, self.dynamics.Inputset, self.dynamics.Outputset, self.pred, symmetric=self.sym)
             self.frame_size_changed = False
         
+        # # Train the model and keep track of history
+        # if len(inds) <= 0:
+        #     Inputset = self.Inputset
+        #     Outputset = self.Outputset
+        # else:
+        #     (Inputset, Outputset) = ( [self.Inputset[i] for i in inds], [self.Outputset[i] for i in inds] )
+        # # Put all data into one array, so that it could train
+        # Inputset = np.concatenate(Inputset)
+        # Outputset = np.concatenate(Outputset)
+        # # Mask input data that should remain unseen
+        # if len(self.input_mask) > 0:
+        #     Inputset = Inputset[:,self.input_mask,:]
+        # return (Inputset, Outputset)
+    
         # Update 0810: Changed everything below into this single line. Note that the super method has normalization added.
         return super().train_data_generation_helper(inds=inds)
-    
-#         # Train the model and keep track of history
-#         if len(inds) <= 0:
-#             Inputset = self.Inputset
-#             Outputset = self.Outputset
-#         else:
-#             (Inputset, Outputset) = ( [self.Inputset[i] for i in inds], [self.Outputset[i] for i in inds] )
-#         # Put all data into one array, so that it could train
-#         Inputset = np.concatenate(Inputset)
-#         Outputset = np.concatenate(Outputset)
-#         # Mask input data that should remain unseen
-#         if len(self.input_mask) > 0:
-#             Inputset = Inputset[:,self.input_mask,:]
-#         return (Inputset, Outputset)
     
     # Modify the original test method, because we need to embed the input data...
     # If using external input, this method expects that input to follow the same input structure
     # as the ones stored in the model. 
+    # Update 0813: Changed self.dynamics.pred into self.pred
     def test(self, Inputset=None, Outputset=None, inds=[], squeeze=True):
 #         (Inputset, Outputset) = delay_embed(self.delay_int, self.de, inds, Inputset, Outputset)
         (Inputset, Outputset) = delay_embed(self.delay_int, self.de, 
-                                            self.dynamics.Inputset, self.dynamics.Outputset, self.dynamics.pred)
+                                            self.dynamics.Inputset, self.dynamics.Outputset, self.pred)
+        # Update 0812: Added Timeset to comply with the new test method in parent
+        Timeset = [inp[:,0,-1] for inp in Inputset]
         # Update 0810: I believe the steps below could be done by calling the following two lines.
         Inputset = [normalize_frame(inputset, params=self.input_norm_params)[0][:,self.input_mask,:] for inputset in Inputset]
         
-        return super().test(Inputset, Outputset, inds=[], squeeze=squeeze, processed=True)
+        return super().test(Inputset, Outputset, Timeset, inds=[], squeeze=squeeze, processed=True)
     
 #         if len(self.input_mask) > 0:
 #             results = [self.model.predict(inputset[:,self.input_mask,:]) for inputset in Inputset]
@@ -528,13 +535,15 @@ class NN_Delay(NN_Dense):
 
 # Parent class for NNs that use FNN-related methods during training.
 # Used to be abstract, but I find it too cumbersome.
+# Update 0813: Changed all self.dynamics.pred into self.pred
 class NN_FNN(NN_Dense):
     def __init__(self, dynamics, input_mask, ratio=10, stop_threshold=0, min_tau=1, max_tau=20, max_de=10, verbose=False, 
                  fnn_ind=0, FNNtype='kennel', uniform_delay=True, # The last argument is only for Cao and Kennel.
                  inverse=True, local_max=True, twoD=False, # Only for Garcia. inverse also appears for Kennel.
                  delay_vars=None, # If the user wants to specify delay values themselves.
                  seed=2020, log_dir=None, tensorboard=False,
-                 Nlayer=2, Nneuron=5, learning_rate=0.001, activation='relu', output_activation='none', optimizer='adam'):
+                 Nlayer=2, Nneuron=5, learning_rate=0.001, activation='relu', output_activation='none', 
+                 optimizer='adam', opt_args=(), loss='mse', pred=-1, lr_sched=None):
         self.verbose=verbose
         # It is assumed that the dynamics object comes with its own data already generated.
         # Also assumes that the first dataset in Inputset is all the data we would use for finding the embedding.
@@ -546,10 +555,14 @@ class NN_FNN(NN_Dense):
         self.min_tau = min_tau
         self.max_dim = max_de
         
+        # Some of the attributes below would be setup in the super() initialization method, but we have to initialize
+        # them here for the methods that are going to use them... For example, self.pred is required for self.find_de_via_fnn,
+        # and we need to set it up here even though it will be setup in super() yet again.
         if len(input_mask) <= 0:
             input_mask = [i+1 for i in range(dynamics.d)] # Because the first row of Inputset is always time
         self.input_mask = input_mask
         self.dynamics = dynamics
+        self.pred = pred
         
         self.uniform_delay = uniform_delay
         self.inverse=inverse
@@ -580,47 +593,48 @@ class NN_FNN(NN_Dense):
         # Because all other uses of "input_mask" was overwritten by the methods below, we can safely hack it.
         input_mask_fake = [i for i in range(self.de)]
         super().__init__(dynamics, input_mask_fake, seed, log_dir, tensorboard,
-                 Nlayer, Nneuron, learning_rate, activation, output_activation, optimizer, frame_size=1)
+                 Nlayer, Nneuron, learning_rate, activation, output_activation, 
+                         optimizer, opt_args=opt_args, loss=loss, pred=pred, lr_sched=lr_sched, frame_size=1)
         # Its super calculates the shapes for inputs and outputs of the network, and nothing else.
         # Rectify the mistaken input mask here
         self.input_mask = input_mask
     
     def find_de_via_fnn(self, fnn_ind=0):
+        # if self.FNNtype.lower() = 'garcia':
+        #     js, ts, args = find_delay_by_FNN_Garcia(self.dynamics.Inputset[fnn_ind][self.input_mask,:], 
+        #                                 ratio=self.ratio, pred=self.dynamics.pred, stop_threshold=self.stop_threshold, 
+        #                                 min_tau=1, max_tau=self.max_tau, max_dim=self.max_dim, 
+        #                                 init_i=0, end_early=True, verbose=self.verbose, 
+        #                                 inverse=self.inverse, local_max=self.local_max, twoD=self.twoD)
+        #     tts = np.cumsum(ts) # Cumulative delay values
+        #     return js, tts, args
+        # elif self.FNNtype.lower() = 'cao':
+        #     js, ttau, args = find_delay_by_FNN_Cao(self.dynamics.Inputset[fnn_ind][self.input_mask,:], 
+        #                              pred=self.dynamics.pred, min_tau=1, max_tau=self.max_tau, max_dim=self.max_dim, 
+        #                              uniform_delay=self.uniform_delay,
+        #                              init_i=0, end_early=True, inverse=self.inverse, verbose=self.verbose)
+        #     # Return ttau[1:], because the method includes an extra 0 at the start of it.
+        #     return js, ttau[1:], args
+        # else:
+        #     # Default Kennel method
+        #     js, ttau, args = find_delay_by_FNN_Kennel(self.dynamics.Inputset[fnn_ind][self.input_mask,:], 
+        #                              ratio=self.ratio, pred=self.dynamics.pred, stop_threshold=self.stop_threshold, 
+        #                              min_tau=1, max_tau=self.max_tau, max_dim=self.max_dim, 
+        #                              init_i=0, end_early=True, verbose=self.verbose)
         return find_delay(self.dynamics.Inputset[fnn_ind][self.input_mask,:], 
                           method='FNN', FNNmethod=self.FNNtype, 
                           min_delay=self.min_tau, max_delay=self.max_tau, max_dim=self.max_dim, 
                           end_early=True, verbose=self.verbose, 
-                          ratio=self.ratio, pred=self.dynamics.pred, stop_threshold=self.stop_threshold, 
+                          ratio=self.ratio, pred=self.pred, stop_threshold=self.stop_threshold, 
                           uniform_delay=self.uniform_delay, inverse=self.inverse, local_max=self.local_max, twoD=self.twoD)
-#         if self.FNNtype.lower() = 'garcia':
-#             js, ts, args = find_delay_by_FNN_Garcia(self.dynamics.Inputset[fnn_ind][self.input_mask,:], 
-#                                         ratio=self.ratio, pred=self.dynamics.pred, stop_threshold=self.stop_threshold, 
-#                                         min_tau=1, max_tau=self.max_tau, max_dim=self.max_dim, 
-#                                         init_i=0, end_early=True, verbose=self.verbose, 
-#                                         inverse=self.inverse, local_max=self.local_max, twoD=self.twoD)
-#             tts = np.cumsum(ts) # Cumulative delay values
-#             return js, tts, args
-#         elif self.FNNtype.lower() = 'cao':
-#             js, ttau, args = find_delay_by_FNN_Cao(self.dynamics.Inputset[fnn_ind][self.input_mask,:], 
-#                                      pred=self.dynamics.pred, min_tau=1, max_tau=self.max_tau, max_dim=self.max_dim, 
-#                                      uniform_delay=self.uniform_delay,
-#                                      init_i=0, end_early=True, inverse=self.inverse, verbose=self.verbose)
-#             # Return ttau[1:], because the method includes an extra 0 at the start of it.
-#             return js, ttau[1:], args
-#         else:
-#             # Default Kennel method
-#             js, ttau, args = find_delay_by_FNN_Kennel(self.dynamics.Inputset[fnn_ind][self.input_mask,:], 
-#                                      ratio=self.ratio, pred=self.dynamics.pred, stop_threshold=self.stop_threshold, 
-#                                      min_tau=1, max_tau=self.max_tau, max_dim=self.max_dim, 
-#                                      init_i=0, end_early=True, verbose=self.verbose)
     
     def delay_embed_fnn(self, inputsets):
         if self.FNNtype.lower() == 'garcia':
             return delay_embed_Garcia(self.js, self.tts, 
-                                  inputsets, self.dynamics.Outputset, self.dynamics.pred, Timeset=self.dynamics.Timeset)
+                                  inputsets, self.dynamics.Outputset, self.pred, Timeset=self.dynamics.Timeset)
         else:
             return delay_embed_Cao(self.FNNargs, 
-                                  inputsets, self.dynamics.Outputset, self.dynamics.pred, Timeset=self.dynamics.Timeset)
+                                  inputsets, self.dynamics.Outputset, self.pred, Timeset=self.dynamics.Timeset)
     
 #     # Implement this method in child classes for generating the embedded version of the provided dataset.
 #     # Keeps "inputset" as an argument, because we need to apply mask to self.Inputset.
@@ -657,21 +671,30 @@ class NN_FNN(NN_Dense):
             print('Inputset size = {0}; outputset size = {1}'.format(Inputset.shape, Outputset.shape))
             print('Input set is masked by ', self.input_mask)
         # Mask input data that should remain unseen <-- This step became unnecessary after we moved it to the front.
-#         if len(self.input_mask) > 0:
-#             Inputset = Inputset[:,self.input_mask,:]
+        # if len(self.input_mask) > 0:
+        #     Inputset = Inputset[:,self.input_mask,:]
         return (Inputset, Outputset)
     
     # Modify the original test method, because we need to embed the input data...
     # __I changed the embedding method and this method to allow it to return time data in frames__
     # __Also because Garcia FNN has a different embedding__
+    # Update 0818: The normalization implementation in 0810 risks not getting updated or some other thing. I re-did
+    # it using normalize_frame(), just like all other places where normalize() is used. 
     # Update 0810: Added normalization. Note that its process is different than the parent method's process,
     # because it applied input mask earlier. Thus we apply mask inside the call, and can't use normalize_frame().
     def test(self, inds=[], squeeze=True):
-        inputsets = [normalize( inputset[self.input_mask,:], axis=0,
-                                params=self.input_norm_params)[0] for inputset in self.dynamics.Inputset]
-#         inputsets = [inputset[self.input_mask,:] for inputset in self.dynamics.Inputset]
-        (Inputset, Outputset, Timeset) = self.delay_embed_fnn(
-                                                              inputsets)
+        # 0818 new code
+        inputsets = [ inputset[self.input_mask,:] for inputset in self.dynamics.Inputset]
+        (Inputset, Outputset, Timeset) = self.delay_embed_fnn(inputsets)
+        Inputset = [normalize_frame( inputset, params=self.input_norm_params)[0] for inputset in Inputset]
+        
+        # compare to 0810 old code
+        # inputsets = [normalize( inputset[self.input_mask,:], axis=0,
+        #                         params=self.input_norm_params)[0] for inputset in self.dynamics.Inputset]
+        # inputsets = [inputset[self.input_mask,:] for inputset in self.dynamics.Inputset]
+        # (Inputset, Outputset, Timeset) = self.delay_embed_fnn(
+        #                                                       inputsets)
+        
         # The output is still 3D! We constructed it this way. 
         results = [normalize_frame(self.model.predict(inputset), 
                                    params=self.output_norm_params, reverse=True)[0] for inputset in Inputset]
@@ -696,18 +719,22 @@ class NN_Garcia(NN_Dense):
     def __init__(self, dynamics, input_mask, ratio=10, stop_threshold=0, max_tau=20, max_de=10, verbose=False, fnn_ind=0,
                  inverse=True, local_max=True, twoD=False,
                  seed=2020, log_dir=None, tensorboard=False,
-                 Nlayer=2, Nneuron=5, learning_rate=0.001, activation='relu', output_activation='none', optimizer='adam'):
+                 Nlayer=2, Nneuron=5, learning_rate=0.001, activation='relu', output_activation='none', 
+                 optimizer='adam', opt_args=(), loss='mse', pred=-1, lr_sched=None):
         super().__init__(dynamics, input_mask, ratio, stop_threshold, max_tau, max_de, verbose, fnn_ind, 'garcia',
                          inverse, local_max, twoD,
-                         seed, log_dir, tensorboard, Nlayer, Nneuron, learning_rate, activation, output_activation, optimizer)
+                         seed, log_dir, tensorboard, Nlayer, Nneuron, learning_rate, activation, output_activation, 
+                         optimizer, opt_args=opt_args, loss=loss, pred=pred, lr_sched=lr_sched)
 
 class NN_Cao(NN_FNN):
     def __init__(self, dynamics, input_mask, max_tau=20, max_de=10, verbose=False, fnn_ind=0, 
                  seed=2020, log_dir=None, tensorboard=False,
-                 Nlayer=2, Nneuron=5, learning_rate=0.001, activation='relu', output_activation='none', optimizer='adam'):
+                 Nlayer=2, Nneuron=5, learning_rate=0.001, activation='relu', output_activation='none', 
+                 optimizer='adam', opt_args=(), loss='mse', pred=-1, lr_sched=None):
         super().__init__(dynamics, input_mask, 10, 0, max_tau, max_de, verbose, fnn_ind, 'cao', 
                          True, True, False, seed, log_dir, tensorboard, 
-                         Nlayer, Nneuron, learning_rate, activation, output_activation, optimizer)
+                         Nlayer, Nneuron, learning_rate, activation, output_activation, 
+                         optimizer, opt_args=opt_args, loss=loss, pred=pred, lr_sched=lr_sched)
 
 # # Checkpoint
 

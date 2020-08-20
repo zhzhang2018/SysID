@@ -1,18 +1,42 @@
 import tensorflow as tf
 import numpy as np
-import os
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from dynamics_methods import *
-# Parent class for neural nets
+import os
 
+# Helper class to store all the network parameters, so that I don't have to carry so much input arguments
+# when I try to initiate a neural net object.
+# I decided to write this stuff when trying to add a learning rate scheculer... without modifying the NN args again.
+# Written on 0811 but not deployed yet - backward compatibility issues.
+# This thing needs to be copied when being passed into a new NN... unless I decide to let NN store every single value later.
+class NN_Args():
+    def __init__(self, ):
+        self.log_dir = log_dir
+        self.tensorboard = tensorboard
+        self.seed = seed
+        self.Nlayer = Nlayer
+        self.Nneuron = Nneuron
+        self.learning_rate = learning_rate
+        self.activation = activation
+        self.output_activation = output_activation
+        self.optimizer = optimizer
+        self.opt_args = opt_args
+        self.frame_size = frame_size
+        self.input_mask = input_mask
+        self.output_shape = output_shape
+#         self. = 
+
+# Parent class for neural nets
 # Should be able to compile a neural net on its own, and then train it
 # by using a system dynamics module inside it to generate training data.
 # Should also be able to take in testing data - maybe take in arbitrary dynamics module as well.
 # Note: Training history can be saved by https://stackoverflow.com/a/55901240
+# Update 0813: Moved the pred value to the network itself, and allowed learning rate scheduler.
 class NN():
     def __init__(self, input_shape, seed=2020, input_reshape=None, log_dir=None, tensorboard=False, 
-                 Nlayer=2, Nneuron=5, learning_rate=0.001, activation='relu', output_activation='none', optimizer='adam',
+                 Nlayer=2, Nneuron=5, learning_rate=0.001, activation='relu', output_activation='none', 
+                 optimizer='adam', opt_args=(), loss='mse', pred=-1, lr_sched=None,
                  dynamics=None, frame_size=1, input_mask=[], output_shape=(1,)):
         self.seed = seed
         if log_dir is None:
@@ -28,7 +52,7 @@ class NN():
         #    %load_ext tensorboard
         self.Nlayer = Nlayer
         self.Nneuron = Nneuron
-        self.learning_rate = learning_rate
+        self.learning_rate = learning_rate 
         self.model = None
         self.input_shape = input_shape
         if input_reshape is None:
@@ -39,8 +63,40 @@ class NN():
         
         self.activation = self.set_activation(activation)
         self.output_activation = self.set_activation(output_activation)
-        self.optimizer = optimizer
-        self.loss = tf.keras.losses.mean_squared_error
+        
+        # Update 0811: Add option to customize optimizer
+        # Ref: https://stackoverflow.com/a/8421543
+        # Also, I realized that learning_rate has been unused since the beginning of this code,
+        # so I'm finally using it here.
+        if len(opt_args) == 0:
+            opt_args = (learning_rate,)
+        if isinstance(optimizer, str):
+            # Obtain the actual optimizer method, and initialize it with optimizer arguments
+            self.optimizer = type(tf.keras.optimizers.get(optimizer))(*opt_args)
+        elif isinstance(optimizer, type):
+            self.optimizer = optimizer(*opt_args)
+        else:
+            # Otherwise, we assume it's already an instantiated method
+            self.optimizer = optimizer
+        self.opt_args = opt_args
+        
+        # Determine loss function
+        if hasattr(loss, '__call__'):
+            self.loss = loss
+        else:
+            if loss.lower() == 'log mse':
+                self.loss = tf.keras.losses.mean_squared_logarithmic_error
+            else:
+                self.loss = tf.keras.losses.mean_squared_error
+
+        # Determine learning rate scheduler (if any)
+        def default_schedule(epoch, curr_lr):
+            return curr_lr
+        if lr_sched is None:
+            self.lr_sched = default_schedule
+        else:
+            self.lr_sched = lr_sched
+        self.train_callback.append( tf.keras.callbacks.LearningRateScheduler(self.lr_sched) )
         
         #self.construct()
         
@@ -49,6 +105,12 @@ class NN():
         self.frame_size = frame_size
         self.frame_size_changed = True
         self.input_mask = input_mask # Controls which variables are observed
+        
+        # Determine prediction timesteps
+        if pred < 0:
+            self.pred = self.dynamics.pred
+        else:
+            self.pred = pred
         
         # Other variables to log information during training
         self.history = []  # Will be storing dictionaries of histories
@@ -125,7 +187,8 @@ class NN():
         # Helper method to gather data and make them into framed training data
         if self.frame_size_changed:
 #             (self.Inputset, self.Outputset) = self.dynamics.framing(frame_size=self.frame_size)
-            (self.Inputset, self.Outputset) = framing(self.dynamics.Inputset, self.dynamics.Outputset, frame_size=self.frame_size)
+            (self.Inputset, self.Outputset) = framing(self.dynamics.Inputset, self.dynamics.Outputset,
+                                                      frame_size=self.frame_size, pred_size=self.pred)
             self.frame_size_changed = False
         # Train the model and keep track of history
         # Update 0810: Changed the if-else below to a more simple and hopefully child-friendly logic flow.
@@ -134,13 +197,13 @@ class NN():
         Outputset = self.Outputset
         if len(inds) > 0:
             (Inputset, Outputset) = ( [self.Inputset[i] for i in inds], [self.Outputset[i] for i in inds] )
-#         if len(inds) <= 0:
-#             Inputset = self.Inputset
-#             Outputset = self.Outputset
-#         else:
-#             (Inputset, Outputset) = self.dynamics.take_dataset(inds)
-#             (Inputset, Outputset) = framing(input_data=Inputset, output_data=Outputset)
-# #             (Inputset, Outputset) = self.dynamics.framing(input_data=Inputset, output_data=Outputset)
+        # if len(inds) <= 0:
+        #     Inputset = self.Inputset
+        #     Outputset = self.Outputset
+        # else:
+        #     (Inputset, Outputset) = self.dynamics.take_dataset(inds)
+        #     (Inputset, Outputset) = framing(input_data=Inputset, output_data=Outputset)
+        # #             (Inputset, Outputset) = self.dynamics.framing(input_data=Inputset, output_data=Outputset)
 
         # Put all data into one array, so that it could train
         Inputset = np.concatenate(Inputset)
@@ -170,40 +233,47 @@ class NN():
     #    If they are of the right shape (framed & masked), and are normalized, set "processed" to be True.
     # 2. Use data already inside the dynamics by specifying their index in inds
     # Update 0810: Slightly modified the logic flow to allow normalization.
-    def test(self, Inputset=None, Outputset=None, inds=[], squeeze=True, processed=False):
+    # Update 0812: Added Timeset as return outputs, to look forwards to NN_FNN implementation.
+    # Update 0813: Added argument "pred" in framing() to reflect the need of delay embeddings, and make plots normal
+    def test(self, Inputset=None, Outputset=None, Timeset=None, inds=[], squeeze=True, processed=False):
         # Data processing etc.
         if len(inds) > 0:
             (Inputset, Outputset) = self.dynamics.take_dataset(inds)
             processed = False
+        
+        # 0812: Added Timeset
         if not processed:
-            (Inputset, Outputset) = framing(input_data=Inputset, output_data=Outputset)
+            (Inputset, Outputset) = framing(input_data=Inputset, output_data=Outputset, pred_size=self.pred)
+            Timeset = [inputset[:,0] for inputset in Inputset]
             Inputset = [normalize_frame(inputset, params=self.input_norm_params)[0][:,self.input_mask,:] for inputset in Inputset]
+#         print(Timeset, Timeset[0].shape, Inputset[0].shape)
         
         # Do prediction and de-normalize the prediction result
         results = [normalize_frame(self.model.predict(inputset), 
                                    params=self.output_norm_params, reverse=True)[0] for inputset in Inputset]
         
-#         if len(inds) <= 0:
-#             # Use custom dataset
-#             results = [self.model.predict(inputset) for inputset in Inputset]
-#         else:
-#             # Use existing dataset
-#             (Inputset, Outputset) = self.dynamics.take_dataset(inds)
-# #             (Inputset, Outputset) = self.dynamics.framing(input_data=Inputset, output_data=Outputset)
-#             (Inputset, Outputset) = framing(input_data=Inputset, output_data=Outputset)
-#             if len(self.input_mask) > 0:
-#                 results = [self.model.predict(inputset[:,self.input_mask,:]) for inputset in Inputset]
-#             else:
-#                 results = [self.model.predict(inputset) for inputset in Inputset]
-#             # The returned Inputset and Outputset are already framed.
+        # if len(inds) <= 0:
+        #     # Use custom dataset
+        #     results = [self.model.predict(inputset) for inputset in Inputset]
+        # else:
+        #     # Use existing dataset
+        #     (Inputset, Outputset) = self.dynamics.take_dataset(inds)
+        # #             (Inputset, Outputset) = self.dynamics.framing(input_data=Inputset, output_data=Outputset)
+        #     (Inputset, Outputset) = framing(input_data=Inputset, output_data=Outputset)
+        #     if len(self.input_mask) > 0:
+        #         results = [self.model.predict(inputset[:,self.input_mask,:]) for inputset in Inputset]
+        #     else:
+        #         results = [self.model.predict(inputset) for inputset in Inputset]
+        #     # The returned Inputset and Outputset are already framed.
         
         # Squeezing reduces unnecessary dimensions.
         if squeeze:
             results = [np.squeeze(result) for result in results]
             Outputset = [np.squeeze(result) for result in Outputset]
             #Inputset = [np.squeeze(result) for result in Inputset]
+            Timeset = [np.squeeze(result) for result in Timeset]
         
-        return results, Outputset, Inputset #, seg_ind_list
+        return results, Outputset, Inputset, Timeset #, seg_ind_list
     
     # Contains the method above
     def test_and_plot(self, Inputset=None, Outputset=None, inds=[]):
@@ -414,16 +484,19 @@ class NN():
 # Typical class of dense neural nets that we've been using for Duffing and F=ma
 class NN_Dense(NN):
     def __init__(self, dynamics, input_mask, seed=2020, log_dir=None, tensorboard=False,
-                 Nlayer=2, Nneuron=5, learning_rate=0.001, activation='relu', output_activation='none', optimizer='adam', 
+                 Nlayer=2, Nneuron=5, learning_rate=0.001, activation='relu', output_activation='none', 
+                 optimizer='adam', opt_args=(), loss='mse', pred=-1, lr_sched=None,
                  frame_size=1, output_frame_size=1):
         input_shape = (len(input_mask), frame_size)
         input_reshape = (len(input_mask) * frame_size,)
         output_shape = (dynamics.output_d, output_frame_size)
         #print(output_shape)
-        super().__init__(input_shape, seed, input_reshape, log_dir, tensorboard, 
-                 Nlayer, Nneuron, learning_rate, activation, output_activation, optimizer, 
-                         dynamics, frame_size, input_mask, output_shape)
-    
+        super().__init__(input_shape, seed=seed, input_reshape=input_reshape, log_dir=log_dir, tensorboard=tensorboard, 
+                         Nlayer=Nlayer, Nneuron=Nneuron, learning_rate=learning_rate, 
+                         activation=activation, output_activation=output_activation, 
+                         optimizer=optimizer, opt_args=opt_args, loss=loss, pred=pred, lr_sched=lr_sched, 
+                         dynamics=dynamics, frame_size=frame_size, input_mask=input_mask, output_shape=output_shape)
+        
     def set_input_mask(self, mask):
         # Our input shape relies on the mask...
         self.input_shape = (len(mask), self.frame_size)

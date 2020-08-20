@@ -9,7 +9,7 @@ from dynamics_methods import *
 # This module should store the dynamics equations, and be
 # able to generate data as needed.
 class System():
-    def __init__(self, d, init=None, t0=0, tf=1, dt=0.01, noise=0):
+    def __init__(self, d, init=None, t0=0, tf=1, dt=0.01, noise=0, pred=0):
         self.d = d
         if init is None or init.shape != (d,):
             self.init_default = np.zeros((d, ))
@@ -19,6 +19,7 @@ class System():
         self.tf = tf
         self.dt = dt
         self.noise = noise
+        self.pred = pred
         
         # Stores a list of input functions
         self.u_func_list = []
